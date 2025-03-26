@@ -1,3 +1,5 @@
+import glob
+import os.path
 import sys
 import random
 import time
@@ -6,6 +8,7 @@ import numpy as np
 import scipy.io as sio
 
 from PIL import Image
+from torch.fx.experimental.unification.multipledispatch.dispatcher import source
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as tvF
@@ -15,7 +18,8 @@ import torch
 from torch.autograd import Variable
 
 import math
-from skimage import measure
+#from skimage import measure
+from skimage.metrics import structural_similarity as compare_ssim
 from sklearn.metrics import mean_squared_error
 from sklearn.feature_extraction import image
 
@@ -100,16 +104,15 @@ class TedataLoader():
 
     def __init__(self,_te_data_dir=None, args = None):
 
-        self.te_data_dir = _te_data_dir
-        
-        if 'SIDD' in self.te_data_dir or 'DND' in self.te_data_dir or 'CF' in self.te_data_dir or 'TP' in self.te_data_dir:
-            self.data = sio.loadmat(self.te_data_dir)
-        else:
-            self.data = h5py.File(self.te_data_dir, "r")
-            
-        self.clean_arr = self.data["clean_images"]
-        self.noisy_arr = self.data["noisy_images"]
-        self.num_data = self.noisy_arr.shape[0]
+        self.te_raw_data_dir = glob.glob(os.path.join(_te_data_dir,'raw/*.png'),recursive=True)
+        self.te_gt_data_dir = glob.glob(os.path.join(_te_data_dir,'gt/*.png'),recursive=True)
+        #if 'SIDD' in self.te_data_dir or 'DND' in self.te_data_dir or 'CF' in self.te_data_dir or 'TP' in self.te_data_dir:
+        self.te_raw_data_dir.sort()
+        self.te_gt_data_dir.sort()
+        #else:
+            #self.data = h5py.File(self.te_data_dir, "r")
+
+        self.num_data = len(self.te_raw_data_dir)
         self.args = args
         
         print ('num of test images : ', self.num_data)
@@ -119,20 +122,24 @@ class TedataLoader():
     
     def __getitem__(self, index):
         """Retrieves image from folder and corrupts it."""
+        raw_img_path = self.te_raw_data_dir[index]
+        gt_img_path = self.te_gt_data_dir[0]
+        raw_img = Image.open(raw_img_path)
+        gt_img = Image.open(gt_img_path)
+        source = np.array(raw_img,dtype=np.float32)
+        target = np.array(gt_img,dtype=np.float32)
 
-        source = self.data["noisy_images"][index,:,:]
-        target = self.data["clean_images"][index,:,:]
         
-        if 'SIDD' in self.te_data_dir or 'CF' in self.te_data_dir or 'TP' in self.te_data_dir:
-            source = source / 255.
-            target = target / 255.
+        #if 'SIDD' in self.te_data_dir or 'CF' in self.te_data_dir or 'TP' in self.te_data_dir:
+        source = source / 255.
+        target = target / 255.
 
         source = torch.from_numpy(source.reshape(1,source.shape[0],source.shape[1])).float().cuda()
         target = torch.from_numpy(target.reshape(1,target.shape[0],target.shape[1])).float().cuda()
         
         if self.args.loss_function == 'MSE_Affine' or self.args.loss_function == 'N2V':
             target = torch.cat([source,target], dim = 0)
-
+        print('data loading successful---------------------------')
         return source, target
     
 def get_PSNR(X, X_hat):
@@ -144,7 +151,7 @@ def get_PSNR(X, X_hat):
 
 def get_SSIM(X, X_hat):
 
-    test_SSIM = measure.compare_ssim(np.transpose(X, (1,2,0)), np.transpose(X_hat, (1,2,0)), data_range=X.max() - X.min(), multichannel=True)
+    test_SSIM = compare_ssim(np.transpose(X, (1,2,0)), np.transpose(X_hat, (1,2,0)),channel_axis=2, data_range=X.max() - X.min(), multichannel=True)
 
     return test_SSIM
 

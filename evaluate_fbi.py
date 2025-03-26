@@ -1,3 +1,5 @@
+import glob
+
 from core.test_fbi import Test_FBI
 from arguments import get_args
 import torch
@@ -54,8 +56,9 @@ if __name__ == '__main__':
             save_file_name = str(args.date)+ '_'+str(args.model_type)+'_' + str(args.data_type) +'_'+ str(args.data_name)
         
         elif args.data_type == 'FMD' and args.data_name == 'CF_FISH':
-            
-            te_data_dir = './data/test_CF_FISH.mat'
+
+            te_data_dir = './data/test'
+
             fbi_weight_dir = './weights/FBI_Denoiser_CF_FISH.w'
             pge_weight_dir = './weights/PGE_Net_CF_FISH.w'
             
@@ -71,7 +74,8 @@ if __name__ == '__main__':
             
         elif args.data_type == 'FMD' and args.data_name == 'TP_MICE':
             
-            te_data_dir = './data/test_TP_MICE.mat'
+            te_data_dir = glob.glob('./data/test/raw/*',recursive=True)
+            print(te_data_dir)
             fbi_weight_dir = './weights/FBI_Denoiser_TP_MICE.w'
             pge_weight_dir = './weights/PGE_Net_TP_MICE.w'
             
@@ -87,5 +91,6 @@ if __name__ == '__main__':
     print ('save_file_name : ', save_file_name)
     
     # Initialize model and train
+
     test_fbi = Test_FBI(_te_data_dir=te_data_dir, _pge_weight_dir = pge_weight_dir, _fbi_weight_dir = fbi_weight_dir, _save_file_name = save_file_name,  _args = args)
     test_fbi.eval()
